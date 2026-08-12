@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Weather Information System</title>
+</head>
+
+<body>
+
+    <h1>Weather Information System</h1>
+
+    <form action="/weather" method="get">
+        <input
+            type="text"
+            name="location"
+            placeholder="Orlando, FL"
+            required
+        >
+
+        <button type="submit">
+            Get Weather
+        </button>
+    </form>
+
+    <div th:if="${error != null}">
+        <p th:text="${error}"></p>
+    </div>
+
+    <div th:if="${coordinates != null}">
+        <h2 th:text="${search}"></h2>
+
+        <p>
+            Latitude:
+            <span th:text="${coordinates.latitude}"></span>
+        </p>
+
+        <p>
+            Longitude:
+            <span th:text="${coordinates.longitude}"></span>
+        </p>
+    </div>
+
+    <div th:if="${forecast != null}">
+        <h2>Forecast</h2>
+
+        <div th:each="period : ${forecast}">
+
+            <h3 th:text="${period.name}"></h3>
+
+            <img
+                th:src="${period.icon}"
+                th:alt="${period.shortForecast}"
+            >
+
+            <p>
+                Temperature:
+                <span th:text="${period.temperature}"></span>°
+                <span th:text="${period.temperatureUnit}"></span>
+            </p>
+
+            <p th:text="${period.shortForecast}"></p>
+
+            <p>
+                Wind:
+                <span th:text="${period.windSpeed}"></span>
+                <span th:text="${period.windDirection}"></span>
+            </p>
+
+            <p th:text="${period.detailedForecast}"></p>
+
+            <hr>
+        </div>
+    </div>
+
+</body>
+</html>
