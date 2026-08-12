@@ -11,9 +11,9 @@ package weatherapp.model;
  */
 public class Coordinates {
 
-    private double latitude;      // North-South position (-90 to 90 degrees)
-    private double longitude;     // East-West position (-180 to 180 degrees)
-    private String displayName;   // Human-readable location name (e.g., "Orlando, Florida, USA")
+    private final double latitude;      // North-South position (-90 to 90 degrees)
+    private final double longitude;     // East-West position (-180 to 180 degrees)
+    private final String displayName;   // Human-readable location name (e.g., "Orlando, Florida, USA")
 
     /**
      * Constructor for creating a Coordinates object from geocoding results.
