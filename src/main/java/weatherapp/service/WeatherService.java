@@ -8,64 +8,39 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import tools.jackson.databind.JsonNode;
+import weatherapp.model.CurrentWeather;
 import weatherapp.model.ForecastPeriod;
 
-/**
- * Service for fetching weather forecast data from the National Weather Service (NWS) API.
- * 
- * The NWS API uses a two-step process:
- * 1. Call /points/{latitude},{longitude} to get metadata about the location,
- *    including the URL of the forecast endpoint for that location.
- * 2. Call the forecast URL to get the actual forecast data.
- * 
- * This design allows NWS to serve forecasts from different regional forecast offices.
- */
 @Service
 public class WeatherService {
 
     private final WebClient nwsWebClient;
 
-    /**
-     * Constructor for dependency injection.
-     * Spring injects the nwsWebClient bean that was configured in WebClientConfig.
-     * 
-     * @param nwsWebClient The WebClient bean configured to call the NWS API
-     */
     public WeatherService(WebClient nwsWebClient) {
         this.nwsWebClient = nwsWebClient;
     }
 
     /**
-     * Step 1 of NWS forecast retrieval: Get the forecast URL for a location.
-     * 
-     * The NWS /points endpoint takes latitude and longitude and returns metadata,
-     * including a URL we should use for the actual forecast. Different regions are
-     * handled by different forecast offices, so this endpoint tells us which URL to use.
-     * 
-     * @param latitude The latitude of the location
-     * @param longitude The longitude of the location
-     * @return The URL to call for the forecast data
-     * @throws RuntimeException if the API returns no response or forecast URL
+     * Calls the NWS /points endpoint for a latitude and longitude.
+     *
+     * The /points response contains metadata such as:
+     * - forecast URL
+     * - hourly forecast URL
+     * - observation stations URL
      */
-    public String getForecastUrl(double latitude, double longitude) {
+    private JsonNode getPointData(
+            double latitude,
+            double longitude) {
 
-        // NWS API works best with coordinates limited to 4 decimal places
-        // Round the latitude and longitude to avoid overly precise coordinates
-        // that might not match NWS's internal grid
+        // Limit coordinates to 4 decimal places before sending to NWS.
         double lat = Math.round(latitude * 10000.0) / 10000.0;
         double lon = Math.round(longitude * 10000.0) / 10000.0;
 
-        System.out.println("Latitude: " + lat);
-        System.out.println("Longitude: " + lon);
-
-        // Call the NWS /points endpoint
-        // Example URL: https://api.weather.gov/points/28.5383,-81.3792
-        // This returns JSON with properties including forecast URL
         JsonNode response = nwsWebClient.get()
                 .uri("/points/" + lat + "," + lon)
-                .retrieve()  // Execute the request
-                .bodyToMono(JsonNode.class)  // Convert response body to JSON object
-                .block();  // Wait for response synchronously
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block();
 
         if (response == null) {
             throw new RuntimeException(
@@ -73,9 +48,20 @@ public class WeatherService {
             );
         }
 
-        // Extract the forecast URL from the response
-        // Response structure: { "properties": { "forecast": "https://api.weather.gov/gridpoints/TBW/85,56/forecast" } }
-        String forecastUrl = response
+        return response;
+    }
+
+    /**
+     * Gets the forecast URL returned by the NWS /points endpoint.
+     */
+    private String getForecastUrl(
+            double latitude,
+            double longitude) {
+
+        JsonNode pointData =
+                getPointData(latitude, longitude);
+
+        String forecastUrl = pointData
                 .path("properties")
                 .path("forecast")
                 .asString();
@@ -86,37 +72,23 @@ public class WeatherService {
             );
         }
 
-        System.out.println("Forecast URL: " + forecastUrl);
-
         return forecastUrl;
     }
 
     /**
-     * Step 2 of NWS forecast retrieval: Get the actual forecast data.
-     * 
-     * This method orchestrates the two-step process:
-     * 1. Call getForecastUrl() to get the forecast endpoint URL
-     * 2. Call that forecast URL to get the actual forecast periods
-     * 3. Parse the JSON response and convert each period into a ForecastPeriod Java object
-     * 
-     * @param latitude The latitude of the location
-     * @param longitude The longitude of the location
-     * @return A list of ForecastPeriod objects, usually 14 periods (7 days, day/night)
-     * @throws RuntimeException if API calls fail or response structure is unexpected
+     * Gets the multi-day forecast from NWS.
      */
     public List<ForecastPeriod> getForecast(
             double latitude,
             double longitude) {
 
-        // Step 1: Get the forecast URL for this location
+        // First get the location-specific forecast URL.
         String forecastUrl =
                 getForecastUrl(latitude, longitude);
 
-        // Step 2: Call the forecast URL and get the forecast data
-        // The forecast URL typically looks like:
-        // https://api.weather.gov/gridpoints/TBW/85,56/forecast
+        // Then request the actual forecast.
         JsonNode response = nwsWebClient.get()
-                .uri(URI.create(forecastUrl))  // Use the full URL from step 1
+                .uri(URI.create(forecastUrl))
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .block();
@@ -127,8 +99,6 @@ public class WeatherService {
             );
         }
 
-        // Extract the "periods" array from the response
-        // Response structure: { "properties": { "periods": [ { ... }, { ... }, ... ] } }
         JsonNode periods = response
                 .path("properties")
                 .path("periods");
@@ -139,27 +109,207 @@ public class WeatherService {
             );
         }
 
-        // Convert each JSON period object into a ForecastPeriod Java object
-        List<ForecastPeriod> forecast = new ArrayList<>();
+        List<ForecastPeriod> forecast =
+                new ArrayList<>();
 
+        // Convert every JSON forecast period into a Java object.
         for (JsonNode period : periods) {
 
-            // Extract each field from the JSON and create a ForecastPeriod object
             ForecastPeriod forecastPeriod =
                     new ForecastPeriod(
-                            period.path("name").asString(),                  // e.g., "Tonight"
-                            period.path("temperature").asInt(),               // e.g., 75
-                            period.path("temperatureUnit").asString(),        // e.g., "F"
-                            period.path("windSpeed").asString(),              // e.g., "10 mph"
-                            period.path("windDirection").asString(),          // e.g., "NE"
-                            period.path("shortForecast").asString(),          // e.g., "Partly Cloudy"
-                            period.path("detailedForecast").asString(),       // Longer description
-                            period.path("icon").asString()                    // URL to weather icon
+                            period.path("name").asString(),
+                            period.path("startTime").asString(),
+                            period.path("temperature").asInt(),
+                            period.path("temperatureUnit").asString(),
+                            period.path("windSpeed").asString(),
+                            period.path("windDirection").asString(),
+                            period.path("shortForecast").asString(),
+                            period.path("detailedForecast").asString(),
+                            period.path("icon").asString()
                     );
 
             forecast.add(forecastPeriod);
         }
 
         return forecast;
+    }
+
+    /**
+     * Gets the latest observed weather conditions near the requested location.
+     *
+     * Flow:
+     *
+     * coordinates
+     * -> /points
+     * -> observationStations
+     * -> first station
+     * -> latest observation
+     */
+    public CurrentWeather getCurrentWeather(
+            double latitude,
+            double longitude) {
+
+        /*
+         * STEP 1:
+         * Get NWS metadata for the requested coordinates.
+         */
+        JsonNode pointData =
+                getPointData(latitude, longitude);
+
+        /*
+         * STEP 2:
+         * Get the URL containing nearby observation stations.
+         */
+        String stationsUrl = pointData
+                .path("properties")
+                .path("observationStations")
+                .asString();
+
+        if (stationsUrl == null || stationsUrl.isBlank()) {
+            throw new RuntimeException(
+                    "NWS did not return observation stations"
+            );
+        }
+
+        /*
+         * STEP 3:
+         * Request the nearby weather stations.
+         */
+        JsonNode stationsResponse = nwsWebClient.get()
+                .uri(URI.create(stationsUrl))
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block();
+
+        if (stationsResponse == null) {
+            throw new RuntimeException(
+                    "Could not retrieve observation stations"
+            );
+        }
+
+        JsonNode stations =
+                stationsResponse.path("features");
+
+        if (!stations.isArray() || stations.isEmpty()) {
+            throw new RuntimeException(
+                    "No observation stations found"
+            );
+        }
+
+        /*
+         * Use the first station returned by NWS.
+         */
+        JsonNode station =
+                stations.get(0);
+
+        String stationId = station
+                .path("properties")
+                .path("stationIdentifier")
+                .asString();
+
+        String stationName = station
+                .path("properties")
+                .path("name")
+                .asString();
+
+        if (stationId == null || stationId.isBlank()) {
+            throw new RuntimeException(
+                    "Observation station did not contain an ID"
+            );
+        }
+
+        /*
+         * STEP 4:
+         * Get the latest observation from this station.
+         */
+        JsonNode observation = nwsWebClient.get()
+                .uri(
+                        "/stations/"
+                        + stationId
+                        + "/observations/latest"
+                )
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block();
+
+        if (observation == null) {
+            throw new RuntimeException(
+                    "Could not retrieve current weather"
+            );
+        }
+
+        JsonNode properties =
+                observation.path("properties");
+
+        /*
+         * NWS observation values may sometimes be null,
+         * so use getNullableDouble().
+         */
+
+        Double temperatureC =
+                getNullableDouble(
+                        properties
+                                .path("temperature")
+                                .path("value")
+                );
+
+        Double humidity =
+                getNullableDouble(
+                        properties
+                                .path("relativeHumidity")
+                                .path("value")
+                );
+
+        Double windKmh =
+                getNullableDouble(
+                        properties
+                                .path("windSpeed")
+                                .path("value")
+                );
+
+        String description = properties
+                .path("textDescription")
+                .asString();
+
+        /*
+         * Convert Celsius to Fahrenheit.
+         */
+        Double temperatureF =
+                temperatureC == null
+                        ? null
+                        : (temperatureC * 9.0 / 5.0) + 32.0;
+
+        /*
+         * Convert kilometers per hour to miles per hour.
+         */
+        Double windMph =
+                windKmh == null
+                        ? null
+                        : windKmh * 0.621371;
+
+        return new CurrentWeather(
+                stationName,
+                description,
+                temperatureF,
+                humidity,
+                windMph
+        );
+    }
+
+    /**
+     * Safely converts a JSON numeric value into a Double.
+     *
+     * NWS observations can contain null measurements.
+     */
+    private Double getNullableDouble(JsonNode node) {
+
+        if (node == null
+                || node.isNull()
+                || node.isMissingNode()) {
+
+            return null;
+        }
+
+        return node.asDouble();
     }
 }

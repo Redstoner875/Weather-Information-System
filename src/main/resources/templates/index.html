@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <title>Weather Information System</title>
@@ -10,13 +11,9 @@
     <!-- Main title -->
     <h1>Weather Information System</h1>
 
-    <!--
-        Search form section
-        - Sends a GET request to the /weather endpoint with the location query parameter
-        - The location value is sent to WeatherController.getWeather() method
-        - name="location" binds the input field to the @RequestParam String location parameter
-    -->
+    <!-- Search form -->
     <form action="/weather" method="get">
+
         <input
             type="text"
             name="location"
@@ -27,89 +24,207 @@
         <button type="submit">
             Get Weather
         </button>
+
     </form>
 
-    <!--
-        Error message section
-        th:if="${error != null}" - Only render this div if the controller added an "error" attribute to the model
-        This happens when geocoding fails or the weather API call fails
-        th:text="${error}" - Insert the error message text into the <p> tag
-    -->
+
+    <!-- Error message -->
     <div th:if="${error != null}">
+
         <p th:text="${error}"></p>
+
     </div>
 
-    <!--
-        Location details section
-        th:if="${coordinates != null}" - Only render if the controller successfully found coordinates
-        Displays the searched location and its latitude/longitude
-        th:text="${...}" - Extract and display values from the Java objects passed by the controller
-    -->
+
+    <!-- Location information -->
     <div th:if="${coordinates != null}">
-        <!-- Display the search string that was entered -->
+
         <h2 th:text="${search}"></h2>
 
-        <!-- Display the latitude from the Coordinates object -->
         <p>
             Latitude:
             <span th:text="${coordinates.latitude}"></span>
         </p>
 
-        <!-- Display the longitude from the Coordinates object -->
         <p>
             Longitude:
             <span th:text="${coordinates.longitude}"></span>
         </p>
+
     </div>
 
+
+    <!-- Current weather conditions -->
+    <section th:if="${currentWeather != null}">
+
+        <h2>Current Conditions</h2>
+
+        <!-- Current weather description -->
+        <p>
+            Conditions:
+            <strong th:text="${currentWeather.description}"></strong>
+        </p>
+
+        <!-- Current temperature -->
+        <p>
+            Temperature:
+
+            <strong
+                th:if="${currentWeather.temperature != null}"
+                th:text="|${#numbers.formatDecimal(currentWeather.temperature, 1, 1)}°F|">
+            </strong>
+
+            <span
+                th:if="${currentWeather.temperature == null}">
+                N/A
+            </span>
+        </p>
+
+        <!-- Current humidity -->
+        <p>
+            Humidity:
+
+            <strong
+                th:if="${currentWeather.humidity != null}"
+                th:text="|${#numbers.formatDecimal(currentWeather.humidity, 1, 1)}%|">
+            </strong>
+
+            <span
+                th:if="${currentWeather.humidity == null}">
+                N/A
+            </span>
+        </p>
+
+        <!-- Current wind speed -->
+        <p>
+            Wind:
+
+            <strong
+                th:if="${currentWeather.windSpeed != null}"
+                th:text="|${#numbers.formatDecimal(currentWeather.windSpeed, 1, 1)} mph|">
+            </strong>
+
+            <span
+                th:if="${currentWeather.windSpeed == null}">
+                N/A
+            </span>
+        </p>
+
+        <!-- Observation station -->
+        <p>
+            Observation Station:
+            <span th:text="${currentWeather.stationName}"></span>
+        </p>
+
+    </section>
+
+
     <!--
-        Forecast details section
-        th:if="${forecast != null}" - Only render if forecast data is available
+        Display this message if current observations fail,
+        while still allowing the normal forecast to appear.
     -->
-    <div th:if="${forecast != null}">
-        <h2>Forecast</h2>
+    <div th:if="${currentWeatherError != null}">
+
+        <p th:text="${currentWeatherError}"></p>
+
+    </div>
+
+
+    <!-- Today's shorter forecast -->
+    <section
+        th:if="${todayForecast != null and !todayForecast.isEmpty()}">
+
+        <h2>Today's Forecast</h2>
 
         <!--
-            Loop through each ForecastPeriod in the forecast list
-            th:each="period : ${forecast}" - Iterate over each item in the forecast list
-            For each period, render this entire <div> block with the period's data
-            This creates multiple forecast cards/sections (one per forecast period)
+            Only loops through forecast periods belonging
+            to the current forecast date.
         -->
-        <div th:each="period : ${forecast}">
+        <div th:each="period : ${todayForecast}">
 
-            <!-- Period name (e.g., "Tonight", "Thursday", "Thursday Night") -->
+            <!-- Period name such as "Today" or "Tonight" -->
             <h3 th:text="${period.name}"></h3>
 
-            <!-- Weather icon from NWS (image displays the current condition icon) -->
+            <!-- NWS weather icon -->
             <img
                 th:src="${period.icon}"
                 th:alt="${period.shortForecast}"
             >
 
-            <!-- Temperature with unit (e.g., "82°F") -->
+            <!-- Forecast temperature -->
             <p>
-                Temperature:
-                <span th:text="${period.temperature}"></span>°
-                <span th:text="${period.temperatureUnit}"></span>
+                <strong>
+                    <span th:text="${period.temperature}"></span>°
+                    <span th:text="${period.temperatureUnit}"></span>
+                </strong>
             </p>
 
-            <!-- Short forecast description (e.g., "Partly Cloudy") -->
+            <!-- Brief weather description -->
             <p th:text="${period.shortForecast}"></p>
 
-            <!-- Wind information (e.g., "10 mph NE") -->
+            <!-- Forecast wind -->
             <p>
                 Wind:
                 <span th:text="${period.windSpeed}"></span>
                 <span th:text="${period.windDirection}"></span>
             </p>
 
-            <!-- Detailed forecast description with more information -->
+        </div>
+
+    </section>
+
+
+    <!--
+        Full forecast is hidden by default.
+
+        Clicking "Show Full Forecast" expands this section.
+
+        This uses the normal HTML <details> element, so
+        no JavaScript is required.
+    -->
+    <details
+        th:if="${forecast != null and !forecast.isEmpty()}">
+
+        <summary>
+            Show Full Forecast
+        </summary>
+
+        <div th:each="period : ${forecast}">
+
+            <h3 th:text="${period.name}"></h3>
+
+            <!-- NWS weather icon -->
+            <img
+                th:src="${period.icon}"
+                th:alt="${period.shortForecast}"
+            >
+
+            <!-- Temperature -->
+            <p>
+                Temperature:
+                <span th:text="${period.temperature}"></span>°
+                <span th:text="${period.temperatureUnit}"></span>
+            </p>
+
+            <!-- Short forecast -->
+            <p th:text="${period.shortForecast}"></p>
+
+            <!-- Wind -->
+            <p>
+                Wind:
+                <span th:text="${period.windSpeed}"></span>
+                <span th:text="${period.windDirection}"></span>
+            </p>
+
+            <!-- Full detailed forecast -->
             <p th:text="${period.detailedForecast}"></p>
 
-            <!-- Visual separator between forecast periods -->
             <hr>
+
         </div>
-    </div>
+
+    </details>
 
 </body>
+
 </html>
