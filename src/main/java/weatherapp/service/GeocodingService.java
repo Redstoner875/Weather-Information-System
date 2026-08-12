@@ -17,7 +17,7 @@ public class GeocodingService {
                 .baseUrl("https://nominatim.openstreetmap.org")
                 .defaultHeader(
                         "User-Agent",
-                        "WeatherInformationSystem/1.0 your-email@example.com"
+                        "WeatherInformationSystem/1.0 sareyeshwar@gmail.com"
                 )
                 .build();
     }
