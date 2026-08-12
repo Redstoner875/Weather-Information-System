@@ -62,6 +62,7 @@ public class GeocodingService {
                         .path("/search")
                         .queryParam("q", location)
                         .queryParam("format", "jsonv2")
+                        .queryParam("addressdetails", 1)
                         .queryParam("limit", 1)
                         .build())
                 .retrieve()  // Execute the request and get the response
@@ -86,8 +87,33 @@ public class GeocodingService {
                 Double.parseDouble(result.get("lon").asString());
 
         // Extract the formatted display name (e.g., "Orlando, Orange County, Florida, United States")
-        String displayName =
-                result.get("display_name").asString();
+        JsonNode address =
+                result.path("address");
+
+        String city = firstNonBlank(
+                address,
+                "city",
+                "town",
+                "village",
+                "municipality",
+                "hamlet"
+        );
+
+        String state =
+                address.path("state").asString();
+
+        String displayName;
+
+        if (!city.isBlank() && !state.isBlank()) {
+
+        displayName = city + ", " + state;
+
+        } else {
+
+        // Fall back to Nominatim's full display name
+        displayName =
+                result.path("display_name").asString();
+        }
 
         return new Coordinates(
                 latitude,
@@ -95,4 +121,22 @@ public class GeocodingService {
                 displayName
         );
     }
+
+    private String firstNonBlank(
+        JsonNode address,
+        String... fields) {
+
+    for (String field : fields) {
+
+        String value =
+                address.path(field).asString();
+
+        if (value != null && !value.isBlank()) {
+            return value;
+        }
+    }
+
+    return "";
+}
+
 }

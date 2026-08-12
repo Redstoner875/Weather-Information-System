@@ -41,7 +41,7 @@
     <div th:if="${coordinates != null}">
 
         <!-- Location entered by the user -->
-        <h2 th:text="${search}"></h2>
+        <h2 th:text="${coordinates.displayName}"></h2>
 
         <!-- Coordinates returned by Nominatim -->
         <p>
