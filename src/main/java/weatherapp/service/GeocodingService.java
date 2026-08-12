@@ -6,90 +6,217 @@ import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.JsonNode;
 import weatherapp.model.Coordinates;
 
-/**
- * Service for converting a location string into geographic coordinates (geocoding).
- * 
- * This service uses the free Nominatim OpenStreetMap API to perform geocoding.
- * It takes a user-entered location string like "Orlando, FL" and returns
- * the latitude, longitude, and full display name of the location.
- * 
- * The coordinates are then used by WeatherService to query the NWS weather API.
- */
 @Service
 public class GeocodingService {
 
     private final WebClient webClient;
 
-    /**
-     * Constructor that creates a WebClient configured for the Nominatim API.
-     * Note: This creates a new WebClient instance (not using the @Bean from WebClientConfig).
-     * Nominatim has different requirements than NWS, so it has its own configuration.
-     */
     public GeocodingService() {
 
         this.webClient = WebClient.builder()
                 .baseUrl("https://nominatim.openstreetmap.org")
                 .defaultHeader(
                         "User-Agent",
-                        "WeatherInformationSystem/1.0 sareyeshwar@gmail.com"
+                        "WeatherInformationSystem/1.0 your-email@example.com"
                 )
                 .build();
     }
 
     /**
-     * Converts a location string into geographic coordinates.
-     * 
-     * Flow:
-     * 1. User enters "Orlando, FL" in the web form
-     * 2. This method sends a GET request to Nominatim's /search endpoint
-     * 3. Nominatim returns JSON with matching locations
-     * 4. We parse the first result and extract latitude, longitude, display_name
-     * 5. Return a Coordinates object with these values
-     * 
-     * @param location A location string (e.g., "Orlando, FL", "New York", "40.7128, -74.0060")
-     * @return A Coordinates object with latitude, longitude, and display name
-     * @throws RuntimeException if location not found or API returns no results
+     * Converts a U.S. location or ZIP code into coordinates.
+     *
+     * Supported examples:
+     *
+     * Orlando, FL
+     * Las Vegas
+     * Aurora, Illinois
+     * 89183
+     * 60505
      */
     public Coordinates geocode(String location) {
 
-        // Make HTTP GET request to Nominatim's /search endpoint
-        // The query parameters are:
-        //   q: the search string (the location to find)
-        //   format: "jsonv2" (requests JSON format response)
-        //   limit: 1 (only return the top/best match)
-        JsonNode response = webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/search")
-                        .queryParam("q", location)
-                        .queryParam("format", "jsonv2")
-                        .queryParam("addressdetails", 1)
-                        .queryParam("limit", 1)
-                        .build())
-                .retrieve()  // Execute the request and get the response
-                .bodyToMono(JsonNode.class)  // Convert the response body to a JSON object
-                .block();  // Block until the response arrives (synchronous operation)
+        // Remove spaces before/after the user's input.
+        final String searchLocation = location.trim();
 
-        if (response == null || response.isEmpty()) {
+        if (searchLocation.isBlank()) {
             throw new RuntimeException(
-                    "Location not found: " + location
+                    "Please enter a location."
             );
         }
 
-        // Nominatim returns an array of results. Get the first (best) result.
-        JsonNode result = response.get(0);
+        /*
+         * Detect a normal 5-digit U.S. ZIP code.
+         */
+        boolean isZipCode =
+                searchLocation.matches("\\d{5}");
 
-        // Extract latitude from JSON response and convert from String to double
+        /*
+         * If the user entered something entirely numeric,
+         * but it is NOT 5 digits, reject it instead of allowing
+         * Nominatim to interpret it as something else.
+         *
+         * Example:
+         *
+         * 89183  -> valid
+         * 8918   -> invalid
+         * 891830 -> invalid
+         */
+        if (searchLocation.matches("\\d+")
+                && !isZipCode) {
+
+            throw new RuntimeException(
+                    "Please enter a valid 5-digit U.S. ZIP code."
+            );
+        }
+
+        JsonNode response;
+
+        if (isZipCode) {
+
+            /*
+             * ZIP CODE SEARCH
+             *
+             * Do NOT use q here.
+             *
+             * Nominatim's structured postalcode search is used
+             * instead.
+             *
+             * countrycodes=us guarantees that a number like
+             * 89183 cannot resolve to a postal code in another
+             * country.
+             */
+            response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/search")
+                            .queryParam(
+                                    "postalcode",
+                                    searchLocation
+                            )
+                            .queryParam(
+                                    "countrycodes",
+                                    "us"
+                            )
+                            .queryParam(
+                                    "format",
+                                    "jsonv2"
+                            )
+                            .queryParam(
+                                    "addressdetails",
+                                    1
+                            )
+                            .queryParam(
+                                    "limit",
+                                    1
+                            )
+                            .build()
+                    )
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+        } else {
+
+            /*
+             * NORMAL LOCATION SEARCH
+             *
+             * Examples:
+             *
+             * Las Vegas
+             * Orlando, FL
+             * Aurora, Illinois
+             *
+             * countrycodes=us means Nominatim will only
+             * return locations inside the United States.
+             */
+            response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/search")
+                            .queryParam(
+                                    "q",
+                                    searchLocation
+                            )
+                            .queryParam(
+                                    "countrycodes",
+                                    "us"
+                            )
+                            .queryParam(
+                                    "format",
+                                    "jsonv2"
+                            )
+                            .queryParam(
+                                    "addressdetails",
+                                    1
+                            )
+                            .queryParam(
+                                    "limit",
+                                    1
+                            )
+                            .build()
+                    )
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+        }
+
+        /*
+         * Nothing matched the search.
+         */
+        if (response == null
+                || response.isEmpty()) {
+
+            if (isZipCode) {
+
+                throw new RuntimeException(
+                        "U.S. ZIP code not found: "
+                        + searchLocation
+                );
+            }
+
+            throw new RuntimeException(
+                    "U.S. location not found: "
+                    + searchLocation
+            );
+        }
+
+        /*
+         * We requested limit=1, so use the first result.
+         */
+        JsonNode result =
+                response.get(0);
+
+        /*
+         * Read latitude and longitude.
+         *
+         * Keep using asString() with your Jackson version.
+         */
         double latitude =
-                Double.parseDouble(result.get("lat").asString());
+                Double.parseDouble(
+                        result
+                                .path("lat")
+                                .asString()
+                );
 
-        // Extract longitude from JSON response and convert from String to double
         double longitude =
-                Double.parseDouble(result.get("lon").asString());
+                Double.parseDouble(
+                        result
+                                .path("lon")
+                                .asString()
+                );
 
-        // Extract the formatted display name (e.g., "Orlando, Orange County, Florida, United States")
+        /*
+         * addressdetails=1 gives us structured address
+         * information.
+         */
         JsonNode address =
                 result.path("address");
 
+        /*
+         * Different locations may be classified differently
+         * by OpenStreetMap.
+         *
+         * For example, one location might have "city" while
+         * another might have "town".
+         */
         String city = firstNonBlank(
                 address,
                 "city",
@@ -100,19 +227,38 @@ public class GeocodingService {
         );
 
         String state =
-                address.path("state").asString();
+                address
+                        .path("state")
+                        .asString();
 
         String displayName;
 
-        if (!city.isBlank() && !state.isBlank()) {
+        /*
+         * Preferred format:
+         *
+         * Las Vegas, Nevada
+         * Orlando, Florida
+         * Aurora, Illinois
+         */
+        if (!city.isBlank()
+                && !state.isBlank()) {
 
-        displayName = city + ", " + state;
+            displayName =
+                    city + ", " + state;
 
         } else {
 
-        // Fall back to Nominatim's full display name
-        displayName =
-                result.path("display_name").asString();
+            /*
+             * ZIP-code results sometimes contain less structured
+             * city information.
+             *
+             * If we cannot construct City, State ourselves,
+             * fall back to Nominatim's display name.
+             */
+            displayName =
+                    result
+                            .path("display_name")
+                            .asString();
         }
 
         return new Coordinates(
@@ -122,21 +268,30 @@ public class GeocodingService {
         );
     }
 
+    /**
+     * Returns the first address field that contains a value.
+     *
+     * This is useful because OpenStreetMap does not classify
+     * every populated place using the exact same field.
+     */
     private String firstNonBlank(
-        JsonNode address,
-        String... fields) {
+            JsonNode address,
+            String... fields) {
 
-    for (String field : fields) {
+        for (String field : fields) {
 
-        String value =
-                address.path(field).asString();
+            String value =
+                    address
+                            .path(field)
+                            .asString();
 
-        if (value != null && !value.isBlank()) {
-            return value;
+            if (value != null
+                    && !value.isBlank()) {
+
+                return value;
+            }
         }
+
+        return "";
     }
-
-    return "";
-}
-
 }
