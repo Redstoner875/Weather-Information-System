@@ -7,8 +7,15 @@
 
 <body>
 
+    <!-- Main title -->
     <h1>Weather Information System</h1>
 
+    <!--
+        Search form section
+        - Sends a GET request to the /weather endpoint with the location query parameter
+        - The location value is sent to WeatherController.getWeather() method
+        - name="location" binds the input field to the @RequestParam String location parameter
+    -->
     <form action="/weather" method="get">
         <input
             type="text"
@@ -22,52 +29,84 @@
         </button>
     </form>
 
+    <!--
+        Error message section
+        th:if="${error != null}" - Only render this div if the controller added an "error" attribute to the model
+        This happens when geocoding fails or the weather API call fails
+        th:text="${error}" - Insert the error message text into the <p> tag
+    -->
     <div th:if="${error != null}">
         <p th:text="${error}"></p>
     </div>
 
+    <!--
+        Location details section
+        th:if="${coordinates != null}" - Only render if the controller successfully found coordinates
+        Displays the searched location and its latitude/longitude
+        th:text="${...}" - Extract and display values from the Java objects passed by the controller
+    -->
     <div th:if="${coordinates != null}">
+        <!-- Display the search string that was entered -->
         <h2 th:text="${search}"></h2>
 
+        <!-- Display the latitude from the Coordinates object -->
         <p>
             Latitude:
             <span th:text="${coordinates.latitude}"></span>
         </p>
 
+        <!-- Display the longitude from the Coordinates object -->
         <p>
             Longitude:
             <span th:text="${coordinates.longitude}"></span>
         </p>
     </div>
 
+    <!--
+        Forecast details section
+        th:if="${forecast != null}" - Only render if forecast data is available
+    -->
     <div th:if="${forecast != null}">
         <h2>Forecast</h2>
 
+        <!--
+            Loop through each ForecastPeriod in the forecast list
+            th:each="period : ${forecast}" - Iterate over each item in the forecast list
+            For each period, render this entire <div> block with the period's data
+            This creates multiple forecast cards/sections (one per forecast period)
+        -->
         <div th:each="period : ${forecast}">
 
+            <!-- Period name (e.g., "Tonight", "Thursday", "Thursday Night") -->
             <h3 th:text="${period.name}"></h3>
 
+            <!-- Weather icon from NWS (image displays the current condition icon) -->
             <img
                 th:src="${period.icon}"
                 th:alt="${period.shortForecast}"
             >
 
+            <!-- Temperature with unit (e.g., "82°F") -->
             <p>
                 Temperature:
                 <span th:text="${period.temperature}"></span>°
                 <span th:text="${period.temperatureUnit}"></span>
             </p>
 
+            <!-- Short forecast description (e.g., "Partly Cloudy") -->
             <p th:text="${period.shortForecast}"></p>
 
+            <!-- Wind information (e.g., "10 mph NE") -->
             <p>
                 Wind:
                 <span th:text="${period.windSpeed}"></span>
                 <span th:text="${period.windDirection}"></span>
             </p>
 
+            <!-- Detailed forecast description with more information -->
             <p th:text="${period.detailedForecast}"></p>
 
+            <!-- Visual separator between forecast periods -->
             <hr>
         </div>
     </div>
