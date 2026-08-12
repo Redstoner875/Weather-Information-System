@@ -2,6 +2,7 @@ package weatherapp.controller;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,9 @@ public class WeatherController {
 
     private final GeocodingService geocodingService;
     private final WeatherService weatherService;
+
+    @Value("${google.maps.api.key}")
+    private String googleMapsApiKey;
 
     /**
      * Spring injects both services into the controller.
@@ -94,6 +98,11 @@ public class WeatherController {
                     "forecast",
                     forecast
             );
+
+            model.addAttribute(
+                "googleMapsApiKey",
+                googleMapsApiKey
+        );
 
             /*
              * STEP 4:

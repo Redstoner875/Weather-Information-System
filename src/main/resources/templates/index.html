@@ -11,6 +11,7 @@
     <!-- Main title -->
     <h1>Weather Information System</h1>
 
+
     <!-- Search form -->
     <form action="/weather" method="get">
 
@@ -39,8 +40,10 @@
     <!-- Location information -->
     <div th:if="${coordinates != null}">
 
+        <!-- Location entered by the user -->
         <h2 th:text="${search}"></h2>
 
+        <!-- Coordinates returned by Nominatim -->
         <p>
             Latitude:
             <span th:text="${coordinates.latitude}"></span>
@@ -50,6 +53,27 @@
             Longitude:
             <span th:text="${coordinates.longitude}"></span>
         </p>
+
+
+        <!-- Google Maps location preview -->
+        <h3>Location Map</h3>
+
+        <!--
+            The map uses the exact latitude and longitude returned
+            by Nominatim.
+
+            This allows the user to visually verify that the location
+            being used for the weather request is correct.
+        -->
+        <iframe
+            width="600"
+            height="400"
+            style="border:0; max-width:100%;"
+            loading="lazy"
+            allowfullscreen
+            referrerpolicy="strict-origin-when-cross-origin"
+            th:src="|https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&amp;q=${coordinates.latitude},${coordinates.longitude}&amp;zoom=12|">
+        </iframe>
 
     </div>
 
@@ -64,6 +88,7 @@
             Conditions:
             <strong th:text="${currentWeather.description}"></strong>
         </p>
+
 
         <!-- Current temperature -->
         <p>
@@ -80,6 +105,7 @@
             </span>
         </p>
 
+
         <!-- Current humidity -->
         <p>
             Humidity:
@@ -95,6 +121,7 @@
             </span>
         </p>
 
+
         <!-- Current wind speed -->
         <p>
             Wind:
@@ -109,6 +136,7 @@
                 N/A
             </span>
         </p>
+
 
         <!-- Observation station -->
         <p>
@@ -145,11 +173,13 @@
             <!-- Period name such as "Today" or "Tonight" -->
             <h3 th:text="${period.name}"></h3>
 
+
             <!-- NWS weather icon -->
             <img
                 th:src="${period.icon}"
                 th:alt="${period.shortForecast}"
             >
+
 
             <!-- Forecast temperature -->
             <p>
@@ -159,8 +189,10 @@
                 </strong>
             </p>
 
+
             <!-- Brief weather description -->
             <p th:text="${period.shortForecast}"></p>
+
 
             <!-- Forecast wind -->
             <p>
@@ -179,8 +211,8 @@
 
         Clicking "Show Full Forecast" expands this section.
 
-        This uses the normal HTML <details> element, so
-        no JavaScript is required.
+        This uses the normal HTML <details> element,
+        so no JavaScript is required.
     -->
     <details
         th:if="${forecast != null and !forecast.isEmpty()}">
@@ -189,15 +221,20 @@
             Show Full Forecast
         </summary>
 
+
+        <!-- Loop through every forecast period -->
         <div th:each="period : ${forecast}">
 
+            <!-- Forecast period name -->
             <h3 th:text="${period.name}"></h3>
+
 
             <!-- NWS weather icon -->
             <img
                 th:src="${period.icon}"
                 th:alt="${period.shortForecast}"
             >
+
 
             <!-- Temperature -->
             <p>
@@ -206,8 +243,10 @@
                 <span th:text="${period.temperatureUnit}"></span>
             </p>
 
+
             <!-- Short forecast -->
             <p th:text="${period.shortForecast}"></p>
+
 
             <!-- Wind -->
             <p>
@@ -216,9 +255,12 @@
                 <span th:text="${period.windDirection}"></span>
             </p>
 
+
             <!-- Full detailed forecast -->
             <p th:text="${period.detailedForecast}"></p>
 
+
+            <!-- Separator between forecast periods -->
             <hr>
 
         </div>
